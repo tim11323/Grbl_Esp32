@@ -950,6 +950,7 @@ float* get_wco() {
         if (idx == TOOL_LENGTH_OFFSET_AXIS) {
             wco[idx] += gc_state.tool_length_offset;
         }
+        wco[idx] = 0;
     }
     return wco;
 }

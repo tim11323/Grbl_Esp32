@@ -43,10 +43,6 @@
 	feed rate may need to be adjusted. The ratio of the step distances in the original coordinate system
 	determined and applied to the feed rate.
 
-	TODO:
-		Finish inverse kinematics.
-
-
 */
 
 // This file is enabled by defining CUSTOM_CODE_FILENAME "scara.cpp"
@@ -54,31 +50,41 @@
 // from ../custom_code.cpp
 
 #include "src/Machines/scara.h"
+#include <Arduino.h>
 
-enum class KinematicError : uint8_t {
-    NONE               = 0,
-    OUT_OF_RANGE       = 1,
-    ANGLE_TOO_NEGATIVE = 2,
-    ANGLE_TOO_POSITIVE = 3,
-};
-
-KinematicError scara_calcInverse(float* target_xyz, float* angle, float* last_angle);
-float          abs_angle(float ang);
+int     scara_calcInverse(float* target_xyz, float* angle, float* last_angle);
+float   abs_angle(float ang);
 
 static float last_angle[2]  = {0, 0};
+
+void machine_init() {}
 
 // this get called before homing
 // return false to complete normal home
 // return true to exit normal homing
 bool kinematics_pre_homing(uint8_t cycle_mask) {
-    return false;  // finish normal homing cycle
+    return true;  // finish normal homing cycle
 }
 
-void kinematics_post_homing() {
-    // sync the X axis (do not need sync but make it for the fail safe)
-    last_angle[R1_AXIS] = sys_position[X_AXIS];
-    // reset the internal angle value
-    last_angle[R2_AXIS] = 0;
+void kinematics_post_homing() {}
+
+bool user_defined_homing(uint8_t cycle_mask) {
+    // reset motor position
+    for (int i = 0; i < N_AXIS; i++)
+    {
+        sys_position[i] = 0;
+    }
+    
+    // home 1st axis
+    limits_go_home(1 << X_AXIS);
+    last_angle[X_AXIS] = 0;
+    // home 2nd axis
+    limits_go_home(1 << Y_AXIS);
+    last_angle[Y_AXIS] = 0;
+
+    plan_reset();
+
+    return false;
 }
 
 /*
@@ -97,14 +103,17 @@ bool cartesian_to_motors(float* target, plan_line_data_t* pl_data, float* positi
     float    dx, dy, dz;          // distances in each cartesian axis
     float    p_dx, p_dy, p_dz;    // distances in each polar axis
     float    dist, angle_dist;    // the distances in both systems...used to determine feed rate
+    float    feedrate;            // the feedrate of entire segment
     uint32_t segment_count;       // number of segments the move will be broken in to.
     float    seg_target[N_AXIS];  // The target of the current segment
     float    angle[N_AXIS];       // target location in polar coordinates
+    float    theta[N_AXIS];       // target motor angle for planning
     float    x_offset = gc_state.coord_system[X_AXIS] + gc_state.coord_offset[X_AXIS];  // offset from machine coordinate system
     float    y_offset = gc_state.coord_system[Y_AXIS] + gc_state.coord_offset[Y_AXIS];  // offset from machine coordinate system
     float    z_offset = gc_state.coord_system[Z_AXIS] + gc_state.coord_offset[Z_AXIS];  // offset from machine coordinate system
-    //grbl_sendf(CLIENT_SERIAL, "Position: %4.2f %4.2f %4.2f \r\n", position[X_AXIS] - x_offset, position[Y_AXIS], position[Z_AXIS]);
-    //grbl_sendf(CLIENT_SERIAL, "Target: %4.2f %4.2f %4.2f \r\n", target[X_AXIS] - x_offset, target[Y_AXIS], target[Z_AXIS]);
+    //grbl_sendf(CLIENT_SERIAL, "Offset: %4.2f %4.2f %4.2f \r\n", x_offset, y_offset, z_offset);
+    //grbl_sendf(CLIENT_SERIAL, "Position: %4.2f %4.2f %4.2f \r\n", position[X_AXIS], position[Y_AXIS], position[Z_AXIS]);
+    //grbl_sendf(CLIENT_SERIAL, "Target: %4.2f %4.2f %4.2f \r\n", target[X_AXIS], target[Y_AXIS], target[Z_AXIS]);
     // calculate cartesian move distance for each axis
     dx = target[X_AXIS] - position[X_AXIS];
     dy = target[Y_AXIS] - position[Y_AXIS];
@@ -117,40 +126,45 @@ bool cartesian_to_motors(float* target, plan_line_data_t* pl_data, float* positi
     } else {
         segment_count = ceil(dist / SEGMENT_LENGTH);  // determine the number of segments we need	... round up so there is at least 1
     }
+    feedrate = pl_data->feed_rate;
     dist /= segment_count;  // segment distance
     for (uint32_t segment = 1; segment <= segment_count; segment++) {
         // determine this segment's target
-        seg_target[X_AXIS] = position[X_AXIS] + (dx / float(segment_count) * segment) - x_offset;
-        seg_target[Y_AXIS] = position[Y_AXIS] + (dy / float(segment_count) * segment) - y_offset;
-        seg_target[Z_AXIS] = position[Z_AXIS] + (dz / float(segment_count) * segment) - z_offset;
-        scara_calcInverse(seg_target, angle, last_angle);
+        seg_target[X_AXIS] = position[X_AXIS] + (dx / float(segment_count) * segment);
+        seg_target[Y_AXIS] = position[Y_AXIS] + (dy / float(segment_count) * segment);
+        int status = scara_calcInverse(seg_target, angle, last_angle);
+        if (status == -1) {
+            grbl_msg_sendf(CLIENT_SERIAL, MsgLevel::Info, "Target unreachable  error %3.3f %3.3f", target[0], target[1]);
+            return false;
+        }
         // begin determining new feed rate
         // calculate move distance for each axis
-        p_dx                      = angle[R1_AXIS] - last_angle[0];
-        p_dy                      = angle[R2_AXIS] - last_angle[1];
+        p_dx                      = angle[R1_AXIS] - last_angle[R1_AXIS];
+        p_dy                      = angle[R2_AXIS] - last_angle[R2_AXIS];
         p_dz                      = dz;
         angle_dist                = sqrt((p_dx * p_dx) + (p_dy * p_dy) + (p_dz * p_dz));  // calculate the total move distance
         float polar_rate_multiply = 1.0;                                                  // fail safe rate
+        
         if (angle_dist == 0 || dist == 0) {
             // prevent 0 feed rate and division by 0
             polar_rate_multiply = 1.0;  // default to same feed rate
         } else {
             // calc a feed rate multiplier
             polar_rate_multiply = angle_dist / dist;
-            if (polar_rate_multiply < 0.5) {
+            if (polar_rate_multiply < 0.001) {
                 // prevent much slower speed
-                polar_rate_multiply = 0.5;
+                polar_rate_multiply = 0.001;
             }
         }
-        pl_data->feed_rate *= polar_rate_multiply;  // apply the distance ratio between coord systems
+        pl_data->feed_rate = feedrate * polar_rate_multiply;  // apply the distance ratio between coord systems
         // end determining new feed rate
-        angle[R1_AXIS] += x_offset;
-        angle[R2_AXIS] += y_offset;
-        angle[Z_AXIS]  += z_offset;
+
+        theta[R1_AXIS] = angle[R1_AXIS] + X_OFFSET;
+        theta[R2_AXIS] = angle[R2_AXIS] + Y_OFFSET;
 
         // mc_line() returns false if a jog is cancelled.
         // In that case we stop sending segments to the planner.
-        if (!mc_line(angle, pl_data)) {
+        if (!mc_line(theta, pl_data)) {
             return false;
         }
 
@@ -176,10 +190,10 @@ converted = position with forward kinematics applied.
 
 */
 void motors_to_cartesian(float* cartesian, float* motors, int n_axis) {
-    float theta_r1 = radians(motors[X_AXIS]);
-    float theta_r2 = radians(motors[Y_AXIS]);
-    cartesian[X_AXIS] = LENGTH_R1 * cos(theta_r1) + LENGTH_R2 * cos(theta_r1 + theta_r2);
-    cartesian[Y_AXIS] = LENGTH_R1 * sin(theta_r1) + LENGTH_R2 * sin(theta_r1 + theta_r2);
+    float a1 = motors[X_AXIS];
+    float a2 = motors[Y_AXIS];
+    cartesian[X_AXIS] = L1 * cos(a1) + L2 * cos(a2);
+    cartesian[Y_AXIS] = L1 * sin(a1) + L2 * sin(a2);
     cartesian[Z_AXIS] = motors[Z_AXIS];  // unchanged
 }
 
@@ -198,47 +212,49 @@ void motors_to_cartesian(float* cartesian, float* motors, int n_axis) {
 *   a long job.
 *
 */
-KinematicError scara_calcInverse(float* target_xyz, float* joint, float* last_angle) {
-    float delta_ang;  // the difference from the last and next angle
-    float angle[N_AXIS];
-    float x     = target_xyz[X_AXIS];
-    float y     = target_xyz[Y_AXIS];
-    float r2    = x * x + y * y;
-    float r     = sqrt(r2);
-    float theta = atan2(y,x);
-    float cos   = (r2 - LENGTH_R1 * LENGTH_R1 - LENGTH_R2 * LENGTH_R2) / (2 * LENGTH_R1 * LENGTH_R2);
-    float sin   = sqrt(1 - cos * cos);
+int scara_calcInverse(float* target_xyz, float* joint, float* last_angle) {
+    float x = target_xyz[X_AXIS];
+    float y = target_xyz[Y_AXIS];
+    float r = hypot(x, y);
 
-    if (r == 0) {
-        angle[R1_AXIS] = last_angle[R1_AXIS];  // don't care about R1 at center
-        angle[R2_AXIS] = -last_angle[R1_AXIS];
-        return KinematicError::NONE;
-    } else {
-        angle[R1_AXIS] = atan2(y,x) - atan2(LENGTH_R2 * sin, LENGTH_R1 + LENGTH_R2 * cos);
-        angle[R2_AXIS] = theta + atan2(sin, cos);
-        // no negative angles...we want the absolute angle not -90, use 270
-        angle[R1_AXIS] = abs_angle(joint[R1_AXIS]);
+    // check whether x,y is reachable
+    if ((r > L1 + L2) || (r < fabs(L1 - L2)))
+    {
+        return -1;
     }
-    delta_ang = angle[R1_AXIS] - abs_angle(last_angle[0]);
-    // if the delta is above 180 degrees it means we are crossing the 0 degree line
-    if (fabs(delta_ang) <= 180.0)
-        angle[R1_AXIS] = last_angle[0] + delta_ang;
-    else {
-        if (delta_ang > 0.0) {
-            // crossing zero counter clockwise
-            angle[R1_AXIS] = last_angle[0] - (360.0 - delta_ang);
-        } else
-            angle[R2_AXIS] = last_angle[0] + delta_ang + 360.0;
+
+    else if (r == 0)
+    {
+        joint[R1_AXIS] = last_angle[R1_AXIS];  // don't care about R1 at center
+        joint[R2_AXIS] = last_angle[R1_AXIS] + PI;
+    }
+    
+    else
+    {
+        joint[R1_AXIS] = atan2(y,x) - acos((L1*L1 - L2*L2 + r*r) / (2 * L1 * r));
+        joint[R2_AXIS] = PI + joint[R1_AXIS] - acos((L1*L1 + L2*L2 - r*r) / (2 * L1 * L2));
+    }
+
+    for (int i = 0; i < N_AXIS; i++)
+    {
+        // the difference from the last and next angle
+        float delta_angle = abs_angle(joint[i] - last_angle[i]);
+
+        if (delta_angle > PI)
+        {
+            delta_angle -= TWO_PI;
+        }
+        joint[i] = last_angle[i] + delta_angle;
     }
 
     return 0;
 }
 
-// Return a 0-360 angle ... fix above 360 and below zero
-float abs_angle(float ang) {
-    ang = fmod(ang, 360.0);  // 0-360 or 0 to -360
+// Return a 0-2pi angle
+inline float abs_angle(float ang) {
+    ang = fmod(ang, TWO_PI);  // 0-360 or 0 to -360
     if (ang < 0.0)
-        ang = 360.0 + ang;
+        ang += TWO_PI;
     return ang;
 }
 
@@ -261,5 +277,5 @@ void user_defined_macro(uint8_t index) {
 
 // handle the M30 command
 void user_m30() {
-    WebUI::inputBuffer.push("$H\r");
+    //WebUI::inputBuffer.push("$H\r");
 }

@@ -32,27 +32,26 @@
 #define CUSTOM_CODE_FILENAME "Custom/scara.cpp"
 
 #define SPINDLE_TYPE SpindleType::NONE
-// ================== SCARA Geometry ===========================
 
-#define LENGTH_R1   90
-#define LENGTH_R2   90
+// ================== SCARA Geometry ===========================
+#define L1  90
+#define L2  90
 
 // ============ Machine Hardware Definition ====================
-
 #define R1_AXIS 0
 #define R2_AXIS 1
 
-#define SEGMENT_LENGTH 0.5 // segment length in mm
+#define SEGMENT_LENGTH 0.25 // segment length in mm
 
 #define X_STEP_PIN              GPIO_NUM_19
 #define Y_STEP_PIN              GPIO_NUM_16
 #define X_DIRECTION_PIN         GPIO_NUM_18
 #define Y_DIRECTION_PIN         GPIO_NUM_4
 
-#define STEPPERS_DISABLE_PIN    GPIO_NUM_17
-
 #define X_LIMIT_PIN             GPIO_NUM_26
 #define Y_LIMIT_PIN             GPIO_NUM_33
+
+//#define STEPPERS_DISABLE_PIN    GPIO_NUM_17
 
 #define SPINDLE_TYPE SpindleType::NONE
 
@@ -98,32 +97,24 @@
 #define DEFAULT_SOFT_LIMIT_ENABLE 0 // false
 #define DEFAULT_HARD_LIMIT_ENABLE 0  // false
 
-#define DEFAULT_HOMING_ENABLE 1
+#define DEFAULT_HOMING_ENABLE 0
 #define DEFAULT_HOMING_DIR_MASK 0 // move positive dir Z, negative X,Y
-#define DEFAULT_HOMING_FEED_RATE 200.0 // mm/min
-#define DEFAULT_HOMING_SEEK_RATE 1000.0 // mm/min
+#define DEFAULT_HOMING_FEED_RATE 200.0 // rad/min
+#define DEFAULT_HOMING_SEEK_RATE 1000.0 // rad/min
 #define DEFAULT_HOMING_DEBOUNCE_DELAY 250 // msec (0-65k)
-#define DEFAULT_HOMING_PULLOFF 3.0 // mm
-
-#define DEFAULT_SPINDLE_RPM_MAX 1000.0 // rpm
-#define DEFAULT_SPINDLE_RPM_MIN 0.0 // rpm
+#define DEFAULT_HOMING_PULLOFF 0.1 // rad
 
 #define DEFAULT_LASER_MODE 0 // false
 
-#define DEFAULT_X_STEPS_PER_MM 200.0
-#define DEFAULT_Y_STEPS_PER_MM 71.111
-#define DEFAULT_Z_STEPS_PER_MM 100.0 // This is percent in servo mode
+#define DEFAULT_X_STEPS_PER_MM 1273.2395 // 3200 steps / 2PI.
+#define DEFAULT_Y_STEPS_PER_MM 1273.2395
 
-#define DEFAULT_X_MAX_RATE 5000.0 // mm/min
-#define DEFAULT_Y_MAX_RATE 15000.0 // mm/min
-#define DEFAULT_Z_MAX_RATE 3000.0 // mm/min
+#define DEFAULT_X_MAX_RATE 500.0 // rad/min
+#define DEFAULT_Y_MAX_RATE 500.0 // rad/min
 
-#define DEFAULT_X_ACCELERATION 200.0 // mm/sec^2. 200 mm/sec^2 = 720000 mm/min^2
-#define DEFAULT_Y_ACCELERATION 200.0 // mm/sec^2
-#define DEFAULT_Z_ACCELERATION 50.0 // mm/sec^2
+#define DEFAULT_X_ACCELERATION 200.0 // rad/sec^2
+#define DEFAULT_Y_ACCELERATION 200.0 // rad/sec^2
 
-#define DEFAULT_X_MAX_TRAVEL 50.0 // mm NOTE: Must be a positive value.
-#define DEFAULT_Y_MAX_TRAVEL 300.0 // mm NOTE: Must be a positive value.
-#define DEFAULT_Z_MAX_TRAVEL 5.0 // This is percent in servo mode
-
-#define DEFAULT_Z_HOMING_MPOS DEFAULT_Z_MAX_TRAVEL // stays up after homing
+// home position
+#define X_OFFSET 0.0
+#define Y_OFFSET PI + 0.198

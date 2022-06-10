@@ -28,29 +28,28 @@
 
 #define MACHINE_NAME            "ESP32_V4"
 
-#define X_STEP_PIN              GPIO_NUM_12
-#define X_DIRECTION_PIN         GPIO_NUM_14
-#define Y_STEP_PIN              GPIO_NUM_26
-#define Y_DIRECTION_PIN         GPIO_NUM_15
-#define Z_STEP_PIN              GPIO_NUM_27
-#define Z_DIRECTION_PIN         GPIO_NUM_33
+#define X_STEP_PIN              GPIO_NUM_19
+#define X_DIRECTION_PIN         GPIO_NUM_18
+#define Y_STEP_PIN              GPIO_NUM_16
+#define Y_DIRECTION_PIN         GPIO_NUM_4
 
-#define X_LIMIT_PIN             GPIO_NUM_17
-#define Y_LIMIT_PIN             GPIO_NUM_4
-#define Z_LIMIT_PIN             GPIO_NUM_16
+#define X_LIMIT_PIN             GPIO_NUM_26
+#define Y_LIMIT_PIN             GPIO_NUM_33
 
 
 // OK to comment out to use pin for other features
-#define STEPPERS_DISABLE_PIN    GPIO_NUM_13
+#define STEPPERS_DISABLE_PIN    GPIO_NUM_17
 
-#define SPINDLE_TYPE            SpindleType::PWM
-#define SPINDLE_OUTPUT_PIN      GPIO_NUM_2   // labeled SpinPWM
-#define SPINDLE_ENABLE_PIN      GPIO_NUM_22  // labeled SpinEnbl
+#define SPINDLE_TYPE            SpindleType::NONE
 
-#define COOLANT_MIST_PIN        GPIO_NUM_21  // labeled Mist
-#define COOLANT_FLOOD_PIN       GPIO_NUM_25  // labeled Flood
-#define PROBE_PIN               GPIO_NUM_32  // labeled Probe
+#define DEFAULT_X_STEPS_PER_MM 509.2958
+#define DEFAULT_Y_STEPS_PER_MM 509.2958
 
+#define DEFAULT_X_MAX_RATE 12000.0   // mm/min
+#define DEFAULT_Y_MAX_RATE 12000.0   // mm/min
+
+#define DEFAULT_X_ACCELERATION 50.0 // mm/sec^2. 500 mm/sec^2 = 1800000 mm/min^2
+#define DEFAULT_Y_ACCELERATION 50.0 // mm/sec^2
 
 /*
 #define CONTROL_SAFETY_DOOR_PIN GPIO_NUM_35  // labeled Door,  needs external pullup

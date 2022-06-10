@@ -102,7 +102,7 @@ void limits_go_home(uint8_t cycle_mask) {
     pl_data->line_number = HOMING_CYCLE_LINE_NUMBER;
 #endif
     // Initialize variables used for homing computations.
-    uint8_t n_cycle = (2 * n_homing_locate_cycle + 1);
+    uint8_t n_cycle = (1 * n_homing_locate_cycle + 1);
     uint8_t step_pin[MAX_N_AXIS];
     float   max_travel = 0.0;
 
@@ -121,7 +121,8 @@ void limits_go_home(uint8_t cycle_mask) {
     uint8_t  n_active_axis;
     AxisMask limit_state, axislock;
     do {
-        float* target = system_get_mpos();
+        //float* target = system_get_mpos();
+        float target[N_AXIS] = {0};
         // Initialize and declare variables needed for homing routine.
         axislock      = 0;
         n_active_axis = 0;
